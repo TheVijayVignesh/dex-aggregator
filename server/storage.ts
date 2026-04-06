@@ -1,11 +1,10 @@
 import { db } from "./db";
 import {
-  exchanges, tokens, prices, transactions,
-  type Exchange, type InsertExchange,
-  type Token, type InsertToken,
-  type Price, type InsertPrice,
-  type Transaction, type InsertTransaction,
-  type PriceWithDetails, type TransactionWithDetails
+  cryptoAssets, exchangeProviders, simulatedRates, conversionHistory,
+  type CryptoAsset, type InsertCryptoAsset,
+  type ExchangeProvider, type InsertExchangeProvider,
+  type SimulatedRate, type InsertSimulatedRate,
+  type ConversionHistory, type InsertConversionHistory
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
@@ -15,22 +14,21 @@ export interface IStorage {
   getUser(id: string): Promise<any>;
   upsertUser(user: any): Promise<any>;
 
-  // Exchanges
-  getExchanges(): Promise<Exchange[]>;
-  createExchange(exchange: InsertExchange): Promise<Exchange>;
+  // Crypto Assets
+  getCryptoAssets(): Promise<CryptoAsset[]>;
+  createCryptoAsset(asset: InsertCryptoAsset): Promise<CryptoAsset>;
 
-  // Tokens
-  getTokens(): Promise<Token[]>;
-  createToken(token: InsertToken): Promise<Token>;
+  // Exchange Providers
+  getExchangeProviders(): Promise<ExchangeProvider[]>;
+  createExchangeProvider(provider: InsertExchangeProvider): Promise<ExchangeProvider>;
 
-  // Prices
-  getPrices(): Promise<PriceWithDetails[]>;
-  createPrice(price: InsertPrice): Promise<Price>;
-  updatePrice(id: number, price: Partial<InsertPrice>): Promise<Price>;
+  // Simulated Rates
+  getSimulatedRates(): Promise<SimulatedRate[]>;
+  createSimulatedRate(rate: InsertSimulatedRate): Promise<SimulatedRate>;
 
-  // Transactions
-  getTransactions(userId: string): Promise<TransactionWithDetails[]>;
-  createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  // Conversion History
+  getConversionHistory(userId: string): Promise<ConversionHistory[]>;
+  createConversion(history: InsertConversionHistory): Promise<ConversionHistory>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -38,59 +36,44 @@ export class DatabaseStorage implements IStorage {
   async getUser(id: string) { return authStorage.getUser(id); }
   async upsertUser(user: any) { return authStorage.upsertUser(user); }
 
-  async getExchanges(): Promise<Exchange[]> {
-    return await db.select().from(exchanges);
+  // Crypto Assets
+  async getCryptoAssets(): Promise<CryptoAsset[]> {
+    return await db.select().from(cryptoAssets);
   }
 
-  async createExchange(exchange: InsertExchange): Promise<Exchange> {
-    const [newExchange] = await db.insert(exchanges).values(exchange).returning();
-    return newExchange;
+  async createCryptoAsset(asset: InsertCryptoAsset): Promise<CryptoAsset> {
+    const [newAsset] = await db.insert(cryptoAssets).values(asset).returning();
+    return newAsset;
   }
 
-  async getTokens(): Promise<Token[]> {
-    return await db.select().from(tokens);
+  // Exchange Providers
+  async getExchangeProviders(): Promise<ExchangeProvider[]> {
+    return await db.select().from(exchangeProviders);
   }
 
-  async createToken(token: InsertToken): Promise<Token> {
-    const [newToken] = await db.insert(tokens).values(token).returning();
-    return newToken;
+  async createExchangeProvider(provider: InsertExchangeProvider): Promise<ExchangeProvider> {
+    const [newProvider] = await db.insert(exchangeProviders).values(provider).returning();
+    return newProvider;
   }
 
-  async getPrices(): Promise<PriceWithDetails[]> {
-    return await db.query.prices.findMany({
-      with: {
-        exchange: true,
-        token: true,
-      },
-      orderBy: desc(prices.updatedAt),
-    });
+  // Simulated Rates
+  async getSimulatedRates(): Promise<SimulatedRate[]> {
+    return await db.select().from(simulatedRates).orderBy(desc(simulatedRates.simulatedAt));
   }
 
-  async createPrice(price: InsertPrice): Promise<Price> {
-    const [newPrice] = await db.insert(prices).values(price).returning();
-    return newPrice;
+  async createSimulatedRate(rate: InsertSimulatedRate): Promise<SimulatedRate> {
+    const [newRate] = await db.insert(simulatedRates).values(rate).returning();
+    return newRate;
   }
 
-  async updatePrice(id: number, price: Partial<InsertPrice>): Promise<Price> {
-    const [updated] = await db.update(prices).set(price).where(eq(prices.id, id)).returning();
-    return updated;
+  // Conversion History
+  async getConversionHistory(userId: string): Promise<ConversionHistory[]> {
+    return await db.select().from(conversionHistory).where(eq(conversionHistory.userId, userId)).orderBy(desc(conversionHistory.id));
   }
 
-  async getTransactions(userId: string): Promise<TransactionWithDetails[]> {
-    return await db.query.transactions.findMany({
-      where: eq(transactions.userId, userId),
-      with: {
-        exchange: true,
-        fromToken: true,
-        toToken: true,
-      },
-      orderBy: desc(transactions.timestamp),
-    });
-  }
-
-  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
-    const [newTransaction] = await db.insert(transactions).values(transaction).returning();
-    return newTransaction;
+  async createConversion(history: InsertConversionHistory): Promise<ConversionHistory> {
+    const [newConversion] = await db.insert(conversionHistory).values(history).returning();
+    return newConversion;
   }
 }
 

@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { 
-  insertExchangeSchema, 
-  insertTokenSchema, 
-  insertPriceSchema, 
-  insertTransactionSchema,
-  exchanges,
-  tokens,
-  prices,
-  transactions
+  insertCryptoAssetSchema, 
+  insertExchangeProviderSchema, 
+  insertSimulatedRateSchema, 
+  insertConversionHistorySchema,
+  cryptoAssets,
+  exchangeProviders,
+  simulatedRates,
+  conversionHistory
 } from "./schema";
 
 export const errorSchemas = {
@@ -27,21 +27,77 @@ export const errorSchemas = {
 };
 
 export const api = {
-  exchanges: {
+  cryptoAssets: {
     list: {
       method: "GET" as const,
-      path: "/api/exchanges",
+      path: "/api/crypto-assets",
       responses: {
-        200: z.array(z.custom<typeof exchanges.$inferSelect>()),
+        200: z.array(z.custom<typeof cryptoAssets.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/crypto-assets",
+      input: insertCryptoAssetSchema,
+      responses: {
+        201: z.custom<typeof cryptoAssets.$inferSelect>(),
+        400: errorSchemas.validation,
       },
     },
   },
-  tokens: {
+  exchangeProviders: {
     list: {
       method: "GET" as const,
-      path: "/api/tokens",
+      path: "/api/exchange-providers",
       responses: {
-        200: z.array(z.custom<typeof tokens.$inferSelect>()),
+        200: z.array(z.custom<typeof exchangeProviders.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/exchange-providers",
+      input: insertExchangeProviderSchema,
+      responses: {
+        201: z.custom<typeof exchangeProviders.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
+  simulatedRates: {
+    list: {
+      method: "GET" as const,
+      path: "/api/simulated-rates",
+      responses: {
+        200: z.array(z.custom<typeof simulatedRates.$inferSelect>()),
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/simulated-rates",
+      input: insertSimulatedRateSchema,
+      responses: {
+        201: z.custom<typeof simulatedRates.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
+  conversionHistory: {
+    list: {
+      method: "GET" as const,
+      path: "/api/conversion-history",
+      responses: {
+        200: z.array(z.custom<typeof conversionHistory.$inferSelect>()),
+        401: errorSchemas.unauthorized,
+      },
+    },
+    create: {
+      method: "POST" as const,
+      path: "/api/conversion-history",
+      input: insertConversionHistorySchema.omit({ userId: true }), // UserId comes from session
+      responses: {
+        201: z.custom<typeof conversionHistory.$inferSelect>(),
+        401: errorSchemas.unauthorized,
+        400: errorSchemas.validation,
       },
     },
   },
@@ -63,7 +119,7 @@ export const api = {
       }),
       responses: {
         200: z.object({
-          exchange: z.custom<typeof exchanges.$inferSelect>(),
+          exchange: z.custom<typeof exchangeProviders.$inferSelect>(),
           rate: z.string(),
           estimatedOutput: z.string(),
         }),
@@ -82,9 +138,9 @@ export const api = {
     create: {
       method: "POST" as const,
       path: "/api/transactions",
-      input: insertTransactionSchema.omit({ userId: true }), // UserId comes from session
+      input: insertConversionHistorySchema.omit({ userId: true }), // UserId comes from session
       responses: {
-        201: z.custom<typeof transactions.$inferSelect>(),
+        201: z.custom<typeof conversionHistory.$inferSelect>(),
         401: errorSchemas.unauthorized,
         400: errorSchemas.validation,
       },

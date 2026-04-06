@@ -1,0 +1,195 @@
+// ==================== PRISMA SCHEMA FOR CURRENCY EXCHANGE PLATFORM ====================
+// Designed for Clerk Authentication Integration
+// User table primary key stores Clerk user_id (e.g., "user_2...")
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== INDEPENDENT ENTITIES ====================
+
+model User {
+  id        String   @id // Clerk user_id (e.g., "user_2...")
+  email     String   @unique
+  username  String?  @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  isActive  Boolean  @default(true) @map("is_active")
+
+  // Relations
+  userSessions UserSession[]
+  transactions Transaction[]
+
+  @@map("users")
+  @@index([email], map: "users_email_idx")
+  @@index([id], map: "users_clerk_id_idx")
+}
+
+model MarketPair {
+  id                Int      @id @default(autoincrement())
+  baseCurrencyCode  String   @map("base_currency_code") @db.VarChar(10)
+  quoteCurrencyCode String   @map("quote_currency_code") @db.VarChar(10)
+  pairCode          String   @unique @map("pair_code") @db.VarChar(20)
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  exchangeRates     ExchangeRate[]
+  transactions      Transaction[]
+  transactionPaths  TransactionPath[]
+
+  @@map("market_pairs")
+  @@index([pairCode], map: "market_pairs_pair_code_idx")
+  @@index([baseCurrencyCode, quoteCurrencyCode], map: "market_pairs_currency_pair_idx")
+}
+
+model ApiProvider {
+  id           Int      @id @default(autoincrement())
+  providerName String   @unique @map("provider_name") @db.VarChar(100)
+  apiUrl       String   @map("api_url") @db.VarChar(500)
+  providerType String   @map("provider_type") @db.VarChar(50) // "open/free", "premium", etc.
+  status       String   @default("active") @map("status") @db.VarChar(20) // "active", "inactive", "maintenance"
+
+  // Relations
+  exchangeRates  ExchangeRate[]
+  apiRequestLogs ApiRequestLog[]
+  apiErrorLogs   ApiErrorLog[]
+  bestRates      BestRate[]
+
+  @@map("api_providers")
+  @@index([providerName], map: "api_providers_provider_name_idx")
+  @@index([status], map: "api_providers_status_idx")
+}
+
+// ==================== FIRST-LEVEL DEPENDENT ENTITIES ====================
+
+model UserSession {
+  id         Int       @id @default(autoincrement())
+  userId     String    @map("user_id") @db.VarChar(255)
+  loginTime  DateTime  @default(now()) @map("login_time")
+  logoutTime DateTime? @map("logout_time")
+  ipAddress  String?   @map("ip_address") @db.VarChar(45) // IPv6 compatible
+  userAgent  String?   @map("user_agent")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+  @@index([userId], map: "user_sessions_user_id_idx")
+  @@index([loginTime], map: "user_sessions_login_time_idx")
+}
+
+model ExchangeRate {
+  id          Int      @id @default(autoincrement())
+  pairId      Int      @map("pair_id")
+  providerId  Int      @map("provider_id")
+  rate        Decimal  @db.Decimal(19, 10) // High precision for financial calculations
+  fetchedTime DateTime @default(now()) @map("fetched_time")
+
+  // Relations
+  pair     MarketPair   @relation(fields: [pairId], references: [id], onDelete: Cascade)
+  provider ApiProvider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("exchange_rates")
+  @@index([pairId, providerId], map: "exchange_rates_pair_provider_idx")
+  @@index([fetchedTime], map: "exchange_rates_fetched_time_idx")
+  @@index([rate], map: "exchange_rates_rate_idx")
+}
+
+model Transaction {
+  id              Int      @id @default(autoincrement())
+  userId          String   @map("user_id") @db.VarChar(255)
+  pairId          Int      @map("pair_id")
+  conversionType  String   @map("conversion_type") @db.VarChar(20) // "Direct", "Indirect"
+  requestedAmount Decimal  @map("requested_amount") @db.Decimal(19, 10)
+  resultAmount    Decimal  @map("result_amount") @db.Decimal(19, 10)
+  transactionTime DateTime @default(now()) @map("transaction_time")
+  status          String   @default("pending") @map("status") @db.VarChar(20) // "pending", "completed", "failed"
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pair            MarketPair       @relation(fields: [pairId], references: [id], onDelete: Restrict)
+  transactionPaths TransactionPath[]
+  bestRate        BestRate?
+
+  @@map("transactions")
+  @@index([userId], map: "transactions_user_id_idx")
+  @@index([pairId], map: "transactions_pair_id_idx")
+  @@index([transactionTime], map: "transactions_transaction_time_idx")
+  @@index([status], map: "transactions_status_idx")
+}
+
+model ApiRequestLog {
+  id             Int      @id @default(autoincrement())
+  providerId     Int      @map("provider_id")
+  requestTime    DateTime @default(now()) @map("request_time")
+  endpoint       String   @db.VarChar(500)
+  status         String   @db.VarChar(20) // "success", "error", "timeout"
+  responseTimeMs Decimal? @map("response_time_ms") @db.Decimal(10, 3)
+
+  // Relations
+  provider  ApiProvider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  errorLogs ApiErrorLog[]
+
+  @@map("api_request_logs")
+  @@index([providerId], map: "api_request_logs_provider_id_idx")
+  @@index([requestTime], map: "api_request_logs_request_time_idx")
+  @@index([status], map: "api_request_logs_status_idx")
+}
+
+// ==================== SECOND-LEVEL DEPENDENT ENTITIES ====================
+
+model TransactionPath {
+  id         Int     @id @default(autoincrement())
+  transactionId Int    @map("transaction_id")
+  pairId      Int     @map("pair_id")
+  stepOrder   Int     @map("step_order")
+  stepRate    Decimal @map("step_rate") @db.Decimal(19, 10)
+
+  // Relations
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  pair        MarketPair  @relation(fields: [pairId], references: [id], onDelete: Restrict)
+
+  @@map("transaction_paths")
+  @@index([transactionId], map: "transaction_paths_transaction_id_idx")
+  @@index([transactionId, stepOrder], map: "transaction_paths_transaction_step_idx")
+}
+
+model BestRate {
+  id             Int      @id @default(autoincrement())
+  transactionId  Int      @map("transaction_id")
+  finalRate      Decimal  @map("final_rate") @db.Decimal(19, 10)
+  providerId     Int?     @map("provider_id")
+  conversionType String   @map("conversion_type") @db.VarChar(20)
+  calculatedTime DateTime @default(now()) @map("calculated_time")
+
+  // Relations
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider    ApiProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@map("best_rates")
+  @@index([transactionId], map: "best_rates_transaction_id_idx")
+  @@index([calculatedTime], map: "best_rates_calculated_time_idx")
+}
+
+model ApiErrorLog {
+  id           Int      @id @default(autoincrement())
+  providerId   Int      @map("provider_id")
+  requestId    Int?     @map("request_id")
+  errorMessage String   @map("error_message")
+  errorCode    String?  @map("error_code") @db.VarChar(50)
+  loggedTime   DateTime @default(now()) @map("logged_time")
+
+  // Relations
+  provider ApiProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  request  ApiRequestLog? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@map("api_error_logs")
+  @@index([providerId], map: "api_error_logs_provider_id_idx")
+  @@index([requestId], map: "api_error_logs_request_id_idx")
+  @@index([loggedTime], map: "api_error_logs_logged_time_idx")
+}

@@ -1,15 +1,16 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, ArrowLeftRight, History, LogOut, Wallet } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
+import { LayoutDashboard, ArrowLeftRight, History, LogOut, Wallet, TrendingUp, Calculator } from "lucide-react";
+import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/clerk-react";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useUser();
 
   const links = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/swap", label: "Swap", icon: ArrowLeftRight },
+    { href: "/exchange", label: "Crypto Exchange", icon: Calculator },
     { href: "/history", label: "History", icon: History },
   ];
 
@@ -47,28 +48,17 @@ export function Sidebar() {
         })}
       </nav>
 
-      {user && (
+      <SignedIn>
         <div className="mt-auto pt-6 border-t border-border">
           <div className="flex items-center gap-3 mb-4 px-2">
-            <img 
-              src={user.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`} 
-              alt="Profile" 
-              className="w-10 h-10 rounded-full border border-border"
-            />
+            <UserButton />
             <div className="overflow-hidden">
-              <p className="text-sm font-semibold truncate text-foreground">{user.firstName || 'User'}</p>
-              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              <p className="text-sm font-semibold truncate text-foreground">{user?.firstName || 'User'}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.primaryEmailAddress?.emailAddress || ''}</p>
             </div>
           </div>
-          <button
-            onClick={() => logout()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </button>
         </div>
-      )}
+      </SignedIn>
     </div>
   );
 }

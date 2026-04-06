@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Wallet, ArrowRight, ShieldCheck, Zap, Globe } from "lucide-react";
+import { SignInButton, SignUpButton } from "@clerk/clerk-react";
 
 export default function Login() {
   const features = [
@@ -64,13 +65,35 @@ export default function Login() {
           </div>
 
           <div className="glass-panel p-8 rounded-2xl space-y-6">
-            <Button 
-              className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:scale-[1.02]"
-              onClick={() => window.location.href = "/api/login"}
-            >
-              Sign in with Replit
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
+            <SignInButton mode="modal" forceRedirectUrl="/">
+              <Button 
+                className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:scale-[1.02]"
+              >
+                Sign in with Email
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </SignInButton>
+            
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or
+                </span>
+              </div>
+            </div>
+
+            <SignUpButton mode="modal" forceRedirectUrl="/">
+              <Button 
+                variant="outline"
+                className="w-full h-12 text-base font-semibold transition-all hover:scale-[1.02]"
+              >
+                Create Account
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </SignUpButton>
             
             <p className="text-xs text-center text-muted-foreground">
               By signing in, you agree to our Terms of Service and Privacy Policy.
