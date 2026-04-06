@@ -1,7 +1,6 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
 import { createServer } from "http";
 
 const app = express();
@@ -30,7 +29,6 @@ export function log(message: string, source = "express") {
     second: "2-digit",
     hour12: true,
   });
-
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
@@ -52,7 +50,6 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       log(logLine);
     }
   });
@@ -60,56 +57,60 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  await registerRoutes(httpServer, app);
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  res.status(status).json({ message });
+});
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+// Track initialization so we don't register routes multiple times
+let initialized = false;
+let initPromise: Promise<void> | null = null;
 
-    res.status(status).json({ message });
-    throw err;
-  });
+async function initialize() {
+  if (initialized) return;
+  if (initPromise) return initPromise;
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so that catch-all route
-  // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
-  } else {
+  initPromise = (async () => {
+    await registerRoutes(httpServer, app);
+    initialized = true;
+  })();
+
+  return initPromise;
+}
+
+// Middleware that ensures routes are registered before handling any request
+app.use(async (req, res, next) => {
+  try {
+    await initialize();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Dev: start the server normally
+if (process.env.NODE_ENV !== "production") {
+  (async () => {
+    await initialize();
+
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
-  }
 
-  // ALWAYS serve the app on port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  
-  // Only start server in development
-  if (process.env.NODE_ENV !== 'production') {
-    httpServer.listen(
-      {
-        port,
-        host: "localhost",
-      },
-      async () => {
-        log(`serving on port ${port}`);
-        
-        // Initialize GBM scheduler
-        try {
-          const { default: gbmScheduler } = await import("../lib/services/gbm-simulator");
-            await gbmScheduler.initialize();
-            gbmScheduler.start(60000); // run every 60 seconds
-            log("GBM scheduler started successfully");
-          } catch (error) {
-            log(`Failed to start GBM scheduler: ${error}`);
-          }
-        },
-      );
-  }
-})();
+    const port = parseInt(process.env.PORT || "5000", 10);
+    httpServer.listen({ port, host: "localhost" }, async () => {
+      log(`serving on port ${port}`);
 
-// Export the app for Vercel serverless functions
+      try {
+        const { default: gbmScheduler } = await import("../lib/services/gbm-simulator");
+        await gbmScheduler.initialize();
+        gbmScheduler.start(60000);
+        log("GBM scheduler started successfully");
+      } catch (error) {
+        log(`Failed to start GBM scheduler: ${error}`);
+      }
+    });
+  })();
+}
+
 export default app;
